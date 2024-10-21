@@ -2,8 +2,9 @@ const std = @import("std");
 const httpz = @import("httpz");
 const Allocator = std.mem.Allocator;
 
-const sql = @import("zconn");
+const sql = @import("mysql");
 const testing = std.testing;
+const ht = @import("httpz").testing;
 
 const PORT = 8801;
 
@@ -66,12 +67,10 @@ fn index(_: *httpz.Request, res: *httpz.Response) !void {
 }
 
 fn hello(_: *httpz.Request, res: *httpz.Response) !void {
-    //   const query = try req.query();
-    //    const name = query.get("name") orelse "stranger";
-    const dbval = fromDB();
+    const dbval = fromDB(res.arena);
     if (dbval) |val| {
-        std.debug.print("DBVAL: {s}\n", .{val});
-        res.body = try std.fmt.allocPrint(res.arena, "Hello {s}", .{val});
+        std.debug.print("DBVAL: {s}\n", .{val.?});
+        res.body = try std.fmt.allocPrint(res.arena, "Hello {s}", .{val.?});
     } else |err| {
         std.debug.print("DB fail, {}", .{err});
         res.body = try std.fmt.allocPrint(res.arena, "DBError {}", .{err});
@@ -135,28 +134,49 @@ fn explicitWrite(_: *httpz.Request, res: *httpz.Response) !void {
 const APIError = error{
     DBError,
 };
+// Use arena allocator to avoid mem copy
+pub fn fromDB(allocator: Allocator) !?[]u8 {
+    const db = try sql.DB.init(allocator, .{
+        .database = "",
+        .host = "172.17.0.1",
+        .user = "root",
+        .password = "my-secret-pw",
+    });
+    const query = "SELECT 'hello world' as greeting;";
+    const params = .{};
+    const rs = try db.runPreparedStatement(allocator, query, params);
 
-pub fn fromDB() ![]u8 {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    const allocator = gpa.allocator();
-    const conn = try sql.Connection.newConnection(allocator, .{ .username = "root", .databaseName = "", .password = "my-secret-pw", .host = "172.17.0.1" });
-
-    const res = try conn.executeQuery("select 'hello world' as greeting;", .{});
-    if (res.nextResultSet()) |t| {
-        if (t.nextRow()) |r| {
-            const row = r.columns.?.get(0).?;
-            return row;
-        } else {
-            std.debug.print("Empty set\n", .{});
-        }
+    if (rs.rows.items.len == 1) {
+        return rs.rows.items[0].columns.items[0].?;
     } else {
-        std.debug.print("Failed to query\n", .{});
+        return null;
     }
     return APIError.DBError;
 }
 
-test "fetch from db" {
-    const res = try fromDB();
-    std.debug.print("FromDB: {s}", .{res});
-    try testing.expectEqualStrings("hello world", res);
+var testdb: sql.DB = undefined;
+
+test "connect" {
+    testdb = try sql.DB.init(std.testing.allocator, .{
+        .database = "",
+        .host = "172.17.0.1",
+        .user = "root",
+        .password = "my-secret-pw",
+    });
+}
+
+test "simple select prepared statement" {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    const allocator = gpa.allocator();
+    const query = "SELECT 'just a happy test';";
+    const params = .{};
+    const rs = try testdb.runPreparedStatement(allocator, query, params);
+    try std.testing.expectEqualStrings("just a happy test", rs.rows.items[0].columns.items[0].?);
+}
+
+test "hello fetch" {
+    var wt = ht.init(.{});
+    defer wt.deinit();
+    try hello(wt.req, wt.res);
+    try wt.expectStatus(200);
 }

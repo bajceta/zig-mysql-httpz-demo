@@ -27,9 +27,9 @@
             .url = "git+https://github.com/karlseguin/http.zig?ref=master#dc399be1f1f37fa115b3ec74907f911ae0edb02c",
             .hash = "12206b0f76efa8c4878ccb1273a70fbb626f6f24274a7ff6c401beae675e76350e21",
         },
-        .zcon = .{
-            .url = "git+https://github.com/bajceta/zcon?ref=module-build#34fa3e30dd588f89120bb4bbd8642e09bce9e05f",
-            .hash = "12209e7f85386523d831e35e2a8306e8ab328d68ea9e2f5ba525b3c911afd8403e38",
+        .mysql = .{
+            .url = "git+https://github.com/bajceta/mysqlc.zig?ref=master#a8405565cabd8ecf86836a121873bc7e346f6896",
+            .hash = "1220dc7684c23c1e7f05af6011a2705a981e0acb729a2cb27f00b52dfde1081c2991",
         },
     },
     .paths = .{
